@@ -1,5 +1,10 @@
 package io.github.autumntrace.backfill;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
@@ -11,6 +16,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 public final class TestDatabase {
 
     private static Database.Settings settings;
+    private static final List<String> created = new ArrayList<>();
 
     private TestDatabase() {}
 
@@ -20,6 +26,8 @@ public final class TestDatabase {
             if (url != null && !url.isBlank()) {
                 settings = new Database.Settings(url, env("BACKFILL_TEST_DB_USER", "postgres"),
                         env("BACKFILL_TEST_DB_PASSWORD", "postgres"));
+                // A server that outlives the run: drop the schemas this run made.
+                Runtime.getRuntime().addShutdownHook(new Thread(TestDatabase::dropCreated));
             } else {
                 PostgreSQLContainer container = new PostgreSQLContainer("postgres:18.7-alpine");
                 container.start();
@@ -32,7 +40,24 @@ public final class TestDatabase {
     /** A fresh, migrated schema with a unique name. */
     public static Database fresh(String prefix) {
         String schema = prefix + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        track(schema);
         return Database.open(settings(), schema);
+    }
+
+    /** Remembers a schema to drop at the end of the run. */
+    public static synchronized void track(String schema) {
+        created.add(schema);
+    }
+
+    private static synchronized void dropCreated() {
+        try (Connection c = DriverManager.getConnection(settings.url(), settings.user(), settings.password());
+                Statement statement = c.createStatement()) {
+            for (String schema : created) {
+                statement.execute("drop schema if exists " + schema + " cascade");
+            }
+        } catch (Exception e) {
+            System.err.println("could not drop test schemas: " + e.getMessage());
+        }
     }
 
     private static String env(String name, String fallback) {

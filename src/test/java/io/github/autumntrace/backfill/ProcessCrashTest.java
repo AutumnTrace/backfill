@@ -44,6 +44,8 @@ class ProcessCrashTest {
         String suffix = Long.toString(System.nanoTime(), 36);
         String reference = "proc_ref_" + suffix;
         String crashed = "proc_crash_" + suffix;
+        TestDatabase.track(reference);
+        TestDatabase.track(crashed);
 
         assertThat(cli("--schema", reference, "import", DEMO.toString(), "--quiet").exit()).isZero();
 
