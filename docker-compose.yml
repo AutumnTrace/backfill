@@ -1,0 +1,35 @@
+# PostgreSQL for the CLI, plus the CLI itself as an image.
+#
+#   docker compose run --rm demo                          the crash demo, start to finish
+#   docker compose run --rm backfill status               any command
+#   docker compose up -d db                               just the database, on localhost:55432
+services:
+  db:
+    image: postgres:18.7-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: backfill
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d backfill"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  backfill:
+    build: .
+    environment:
+      BACKFILL_DB_URL: jdbc:postgresql://db:5432/backfill
+    depends_on:
+      db:
+        condition: service_healthy
+
+  demo:
+    build: .
+    environment:
+      BACKFILL_DB_URL: jdbc:postgresql://db:5432/backfill
+    entrypoint: ["/app/scripts/crash-demo.sh"]
+    depends_on:
+      db:
+        condition: service_healthy

@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (PostgreSQL via Testcontainers)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - run: ./mvnw -B verify
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: surefire-reports
+          path: target/surefire-reports
+
+  crash-demo:
+    name: Crash demo against a postgres service
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.7-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: backfill
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      BACKFILL_DB_URL: jdbc:postgresql://localhost:5432/backfill
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - run: ./mvnw -B -q -DskipTests package
+      - name: Crash before and after a commit, resume, compare
+        run: scripts/crash-demo.sh
+      - name: Benchmark (two chunk sizes, 50k lines)
+        run: java -jar target/backfill.jar bench --lines 50000 --seed 7 --chunk-sizes 100,1000 | tee -a "$GITHUB_STEP_SUMMARY"
+
+  compose:
+    name: Docker Compose demo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker compose run --rm demo
+      - if: always()
+        run: docker compose down --volumes
