@@ -1,0 +1,36 @@
+== reference: one uninterrupted import of data/scans-demo.ndjson in chunks of 500
+import 1  completed
+  source     ./data/scans-demo.ndjson  (sha256 b2b564884391..., 2,179,895 bytes)
+  checkpoint byte 2,179,895 of 2,179,895 (100.0%), 12,000 lines, 24 chunks of 500 committed
+  events     11,921 accepted, 50 duplicates, 1 conflicts (quarantined), 28 rejected
+  updated    2026-11-26 06:06:26 by pid 18416
+
+== crash_before: halt the JVM before-commit in the chunk holding line 6000
+CRASH before the COMMIT of the chunk holding lines 5,501-6,000 (halting the JVM)
+(worker exited with 137)
+import 1  interrupted (no writer; resume it)
+  source     ./data/scans-demo.ndjson  (sha256 b2b564884391..., 2,179,895 bytes)
+  checkpoint byte 998,477 of 2,179,895 (45.8%), 5,500 lines, 11 chunks of 500 committed
+  events     5,469 accepted, 20 duplicates, 0 conflicts (quarantined), 11 rejected
+  updated    2026-11-26 06:06:27 by pid 2624
+-- restart
+resuming import 1 at byte 998,477 (line 5,500)
+
+== crash_after: halt the JVM after-commit in the chunk holding line 6000
+CRASH after the COMMIT of the chunk holding lines 5,501-6,000 (halting the JVM)
+(worker exited with 137)
+import 1  interrupted (no writer; resume it)
+  source     ./data/scans-demo.ndjson  (sha256 b2b564884391..., 2,179,895 bytes)
+  checkpoint byte 1,089,305 of 2,179,895 (50.0%), 6,000 lines, 12 chunks of 500 committed
+  events     5,966 accepted, 21 duplicates, 0 conflicts (quarantined), 13 rejected
+  updated    2026-11-26 06:06:31 by pid 18232
+-- restart
+resuming import 1 at byte 1,089,305 (line 6,000)
+
+== compare with the uninterrupted run
+reference    applied 11921, duplicates 50, conflicts 1, rejected 28, 600 stock rows totalling 15879
+crash_before applied 11921, duplicates 50, conflicts 1, rejected 28, 600 stock rows totalling 15879
+identical: 639 canonical lines (out/reference.txt, out/crash_before.txt)
+reference    applied 11921, duplicates 50, conflicts 1, rejected 28, 600 stock rows totalling 15879
+crash_after  applied 11921, duplicates 50, conflicts 1, rejected 28, 600 stock rows totalling 15879
+identical: 639 canonical lines (out/reference.txt, out/crash_after.txt)
